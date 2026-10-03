@@ -21,8 +21,6 @@ RUN mkdir -p /app/data /app/state
 
 # Default environment — override via docker-compose or docker run -e
 ENV DRY_RUN=true \
-    INSTAGRAM_USERNAME="" \
-    INSTAGRAM_PASSWORD="" \
     CYCLE_INTERVAL_HOURS=48 \
     MAX_UNFOLLOWS_PER_CYCLE=30 \
     MAX_WITHDRAWALS_PER_CYCLE=15 \
