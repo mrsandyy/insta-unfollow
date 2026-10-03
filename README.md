@@ -40,23 +40,52 @@ For withdrawing pending follow requests, download your Instagram data:
 Unzip and place the contents into the `./data/` directory so that
 `./data/connections/followers_and_following/pending_follow_requests.json` exists.
 
-### 3. Run with Docker Compose
+### 3. Build & Publish Automatically to GitHub Container Registry (ghcr.io) / Docker Hub
 
+A preconfigured GitHub Actions workflow is included at `.github/workflows/docker-publish.yml`.
+
+1. Create a repository on GitHub (e.g. `insta-unfollow`)
+2. Link your local repo and push:
+   ```bash
+   git remote add origin https://github.com/<YOUR_GITHUB_USERNAME>/insta-unfollow.git
+   git push -u origin main
+   ```
+3. GitHub Actions will automatically:
+   - Build a multi-architecture Docker image (`linux/amd64`, `linux/arm64`)
+   - Publish it to **GitHub Container Registry** at:
+     `ghcr.io/<YOUR_GITHUB_USERNAME>/insta-unfollow:latest`
+   - *(Optional)* If you add `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` in your GitHub repo **Settings → Secrets and variables → Actions**, it will also automatically push to Docker Hub!
+
+### 4. Run the Container Anywhere
+
+#### Option A: Docker Compose (Recommended)
+Edit `DOCKER_IMAGE` or set it in `.env`, then start:
 ```bash
-# Dry run first (no real actions, just logging)
-docker compose up --build
+# Pull and start the daemon in background
+docker compose up -d
 
-# When ready for real actions, edit docker-compose.yml:
-#   DRY_RUN: "false"
-docker compose up --build -d
+# View live logs
+docker compose logs -f
 ```
 
-### 4. Monitor logs
+#### Option B: Single `docker run` command
+```bash
+docker run -d \
+  --name insta-cleanup \
+  --restart unless-stopped \
+  --env-file .env \
+  -e DRY_RUN=false \
+  -v "$(pwd)/state:/app/state" \
+  -v "$(pwd)/data:/app/data" \
+  ghcr.io/<YOUR_GITHUB_USERNAME>/insta-unfollow:latest
+```
+
+### 5. Monitor logs
 
 ```bash
 docker logs -f insta-cleanup
 
-# Or check the persistent log file
+# Or inspect persistent log file
 cat ./state/actions.log
 ```
 
