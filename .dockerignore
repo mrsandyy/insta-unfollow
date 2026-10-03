@@ -1,0 +1,14 @@
+.env
+.venv/
+.git/
+.gitignore
+__pycache__/
+*.pyc
+*.pyo
+state/
+data/
+connections/
+session.json
+progress.json
+actions.log
+*.md

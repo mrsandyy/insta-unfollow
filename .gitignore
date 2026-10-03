@@ -1,0 +1,17 @@
+.env
+session.json
+progress.json
+actions.log
+__pycache__/
+*.pyc
+.venv/
+
+# Docker persistent volumes
+state/
+data/
+connections/
+
+# IDE
+.vscode/
+.idea/
+

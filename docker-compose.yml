@@ -1,0 +1,52 @@
+services:
+  insta-cleanup:
+    # Pre-built image from registry (or uncomment build: . to build locally)
+    image: ${DOCKER_IMAGE:-ghcr.io/YOUR_GITHUB_USERNAME/insta-unfollow:latest}
+    # build: .
+    container_name: insta-cleanup
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # ── Mode ──
+      DRY_RUN: "false"            # Set to "true" to test without making changes
+
+      # ── Cycle ──
+      CYCLE_INTERVAL_HOURS: "48"  # Re-fetch and run cleanup every 48 hours
+      RUN_ONCE: "false"           # Set "true" for a single run then exit
+
+      # ── Rate limits (conservative — new account) ──
+      MAX_UNFOLLOWS_PER_CYCLE: "30"
+      MAX_WITHDRAWALS_PER_CYCLE: "15"
+      DELAY_MIN: "30"             # Min seconds between each action
+      DELAY_MAX: "60"             # Max seconds between each action
+      LONG_BREAK_MIN: "300"       # 5 min break
+      LONG_BREAK_MAX: "600"       # 10 min break
+      ACTIONS_BEFORE_BREAK: "5"   # Take a long break every N actions
+      RATE_LIMIT_SLEEP: "900"     # 15 min sleep on rate limit
+
+      # ── Grace periods ──
+      NON_FOLLOWER_GRACE_DAYS: "2"       # Wait 2 days before unfollowing non-followers
+      PENDING_REQUEST_STALE_DAYS: "3"    # Withdraw follow requests older than 3 days
+
+      # ── Paths (inside container) ──
+      SESSION_FILE: "/app/state/session.json"
+      PROGRESS_FILE: "/app/state/progress.json"
+      LOG_FILE: "/app/state/actions.log"
+      DATA_DIR: "/app/data"
+
+    volumes:
+      # Persistent state (session, progress, logs) — survives container restarts
+      - ./state:/app/state
+
+      # Mount your Instagram data export here (for pending_follow_requests.json)
+      # Download from Instagram → Settings → Your Activity → Download Your Information
+      # Unzip and place the folder contents here
+      - ./data:/app/data
+
+    # Low resource usage — this is a cron-like daemon, not a web server
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
