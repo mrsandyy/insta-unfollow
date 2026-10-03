@@ -29,6 +29,7 @@ from instagrapi import Client
 from instagrapi.exceptions import (
     ChallengeRequired,
     ClientError,
+    ClientThrottledError,
     LoginRequired,
     PleaseWaitFewMinutes,
     RateLimitError,
@@ -176,22 +177,40 @@ def get_client(username: str, password: str) -> Client:
     cl = Client()
     cl.delay_range = [2, 5]  # built-in per-request delay (seconds)
 
+    proxy = os.getenv("PROXY")
+    if proxy:
+        logger.info(f"Using configured proxy: {proxy.split('@')[-1] if '@' in proxy else proxy}")
+        cl.set_proxy(proxy)
+
     if SESSION_FILE.exists():
-        logger.info("Loading saved session...")
+        logger.info(f"Loading saved session from {SESSION_FILE}...")
         try:
             cl.load_settings(SESSION_FILE)
-            cl.login(username, password)
-            cl.get_timeline_feed()  # validate session
-            logger.info("Session restored successfully")
+            cl.get_timeline_feed()  # test if session is alive without re-submitting login form
+            logger.info("Session restored successfully (no login request needed)")
             return cl
-        except (LoginRequired, ChallengeRequired, Exception) as e:
-            logger.warning(f"Saved session invalid ({e}), performing fresh login")
+        except (LoginRequired, ChallengeRequired) as e:
+            logger.warning(f"Saved session expired ({e}), re-authenticating...")
+        except Exception as e:
+            logger.warning(f"Could not restore session ({e}), attempting fresh login...")
 
     logger.info("Performing fresh login...")
-    cl.login(username, password)
-    cl.dump_settings(SESSION_FILE)
-    logger.info("Logged in and session saved")
-    return cl
+    try:
+        cl.login(username, password)
+        cl.dump_settings(SESSION_FILE)
+        logger.info("Logged in and session saved")
+        return cl
+    except ClientThrottledError as e:
+        logger.error(
+            "❌ Instagram blocked/throttled the fresh login request (HTTP 429 Too Many Requests).\n"
+            "   Cloud datacenter IPs (Oracle Cloud, AWS, GCP, etc.) are blocked by Instagram from performing fresh password logins.\n"
+            "   HOW TO FIX:\n"
+            "   1. You already have an authenticated 'session.json' on your local computer.\n"
+            "   2. Copy your local 'session.json' into the 'state/' folder on your server: '~/insta-unfollow/state/session.json'\n"
+            "   3. Restart the container: 'docker compose restart'\n"
+            "   The container will use your valid session cookies and won't need to call the login endpoint!"
+        )
+        raise
 
 
 def save_session(cl: Client) -> None:
@@ -471,7 +490,7 @@ def run_cycle(cl: Client | None, ig_username: str, ig_password: str) -> Client |
             else:
                 human_delay()
 
-        except (RateLimitError, PleaseWaitFewMinutes, ChallengeRequired) as e:
+        except (RateLimitError, PleaseWaitFewMinutes, ChallengeRequired, ClientThrottledError) as e:
             logger.error(f"⚠️  Rate limit / challenge hit: {e}")
             logger.info(f"Sleeping {RATE_LIMIT_SLEEP}s before continuing...")
             skipped_count += len(to_unfollow) - unfollowed_count - skipped_count
@@ -503,7 +522,7 @@ def run_cycle(cl: Client | None, ig_username: str, ig_password: str) -> Client |
             else:
                 human_delay()
 
-        except (RateLimitError, PleaseWaitFewMinutes, ChallengeRequired) as e:
+        except (RateLimitError, PleaseWaitFewMinutes, ChallengeRequired, ClientThrottledError) as e:
             logger.error(f"⚠️  Rate limit / challenge hit: {e}")
             logger.info(f"Sleeping {RATE_LIMIT_SLEEP}s before continuing...")
             skipped_count += len(to_withdraw) - withdrawn_count - skipped_count
